@@ -69,6 +69,23 @@ private:
 public:
     EpochManager() = default;
     
+    ~EpochManager() {
+        // Force reclaim all remaining nodes from all epochs for all threads
+        for (size_t i = 0; i < MAX_THREADS; ++i) {
+            for (size_t e = 0; e < NUM_EPOCHS; ++e) {
+                RetireList& rl = retire_lists[i][e];
+                void* node = rl.head.exchange(nullptr, std::memory_order_acquire);
+                
+                while (node) {
+                    auto* n = static_cast<NodeBase*>(node);
+                    void* next = n->next_retired.load(std::memory_order_relaxed);
+                    n->destroy();
+                    node = next;
+                }
+            }
+        }
+    }
+    
     // Register a thread and get its ID
     size_t register_thread() {
         return thread_counter.fetch_add(1, std::memory_order_relaxed);
@@ -89,8 +106,8 @@ public:
         thread_states[thread_id].local_epoch.store(ge, std::memory_order_relaxed);
         thread_states[thread_id].active.store(true, std::memory_order_release);
         
-        // Re-read global epoch after setting active flag
-        std::atomic_thread_fence(std::memory_order_seq_cst);
+        // Re-read global epoch after setting active flag (acquire fence)
+        std::atomic_thread_fence(std::memory_order_acquire);
         ge = global_epoch.load(std::memory_order_acquire);
         thread_states[thread_id].local_epoch.store(ge, std::memory_order_relaxed);
     }

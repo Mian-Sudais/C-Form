@@ -1,3 +1,10 @@
 ```
-test_mpsc_queue
+# Compiled and build artifacts
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.out
+test_mpsc_queue_*
 ```

@@ -242,13 +242,17 @@ void test_memory_safety() {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     done.store(true, std::memory_order_release);
     
-    // Drain remaining
-    while (queue.dequeue().has_value()) {}
-    
+    // 1. Stop producers first so no new data enters
     for (auto& t : producers) {
         t.join();
     }
+    
+    // 2. Wait for the dedicated consumer thread to finish draining
     consumer.join();
+    
+    // 3. Now the main thread can safely drain anything left over
+    //    because the consumer thread is dead (MPSC: only ONE consumer)
+    while (queue.dequeue().has_value()) {}
     
     // If we got here without segfault, EBR is working
     std::cout << "PASSED\n";
